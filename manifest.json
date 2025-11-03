@@ -1,0 +1,21 @@
+{
+  "name": "Color Viewer 10",
+  "short_name": "ColorViewer",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "image/logo-sample-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "image/logo-sample-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Server Dashboard</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    #login, #dashboard {
+      display: none;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Login -->
+  <div id="login">
+    <h2>Login</h2>
+    <input id="username" placeholder="Username"><br>
+    <input id="password" type="password" placeholder="Password"><br>
+    <button id="loginBtn">Login</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <h2>Color Control Panel</h2>
+    <input type="color" id="colorPicker" value="#00ff00">
+    <button id="sendColor">Send Color to Viewers</button>
+  </div>
+
+  <script>
+    const socket = io(); // auto connects to same origin
+    const loginDiv = document.getElementById("login");
+    const dashDiv = document.getElementById("dashboard");
+    const colorPicker = document.getElementById("colorPicker");
+
+    const USERNAME = "admin";
+    const PASSWORD = "1234";
+
+    loginDiv.style.display = "block";
+
+    document.getElementById("loginBtn").onclick = () => {
+      const u = document.getElementById("username").value;
+      const p = document.getElementById("password").value;
+      if (u === USERNAME && p === PASSWORD) {
+        loginDiv.style.display = "none";
+        dashDiv.style.display = "block";
+      } else {
+        alert("Invalid credentials");
+      }
+    };
+
+    document.getElementById("sendColor").onclick = () => {
+      const color = colorPicker.value;
+      socket.emit("colorSelected", color);
+    };
+  </script>
+</body>
+</html>

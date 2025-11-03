@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Color Viewer 10</title>
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+  <link rel="manifest" href="/manifest.json">
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: #000000;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      font-family: sans-serif;
+
+
+    }
+
+    #colorDisplay {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.5rem;
+      transition: background 0.2s ease;
+    }
+
+    #fullscreenBtn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      font-size: 1.8rem;
+      color: white;
+      background: rgba(0, 0, 0, 0.3);
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      z-index: 1000;
+      backdrop-filter: blur(3px);
+    }
+
+    #fullscreenBtn:active {
+      transform: scale(0.9);
+    }
+
+    #msg {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+    <button id="installBtn" style="position:fixed;bottom:15px;right:15px;">Install App</button>
+
+  <div id="colorDisplay">
+    <div id="msg">Waiting for color signal...</div>
+  </div>
+
+
+  <button id="fullscreenBtn" title="Toggle Fullscreen">
+    <i class="fas fa-expand"></i>
+  </button>
+
+  <script>
+    let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+installBtn.style.display = 'none';
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = 'block';
+});
+
+installBtn.addEventListener('click', async () => {
+  installBtn.style.display = 'none';
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    console.log('User choice:', outcome);
+  }
+});
+
+    let wakeLock = null;
+
+    const socket = io();
+    const colorDisplay = document.getElementById("colorDisplay");
+    const msg = document.getElementById("msg");
+    const fsBtn = document.getElementById("fullscreenBtn");
+    const fsIcon = fsBtn.querySelector("i");
+
+    // Handle color updates
+    socket.on("showColor", (color) => {
+      colorDisplay.style.background = color;
+      msg.innerText = ""; //color;
+    });
+
+    // Fullscreen logic
+    async function enterFullscreen() {
+              // ensure viewport covers safe areas
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (meta) meta.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no');
+
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) await elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+      else if (elem.msRequestFullscreen) await elem.msRequestFullscreen();
+      document.getElementById("colorDisplay").style.paddingBottom = "0px";
+      fsIcon.classList.replace("fa-expand", "fa-compress");
+
+       try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+        }
+      } catch (e) {
+        console.log("Wake lock not supported:", e);
+      }
+    }
+
+    async function exitFullscreen() {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (document.webkitFullscreenElement) await document.webkitExitFullscreen();
+      fsIcon.classList.replace("fa-compress", "fa-expand");
+
+       document.getElementById("colorDisplay").style.paddingBottom = "env(safe-area-inset-bottom)";
+
+      // release wake lock if active
+      console.log("exit: wakeLock status:"+wakeLock);
+      if (wakeLock) {
+        try {
+            await wakeLock.release();
+            wakeLock = null;
+            console.log("Wake lock released.");
+        } catch (e) {
+            console.log("Error releasing wake lock:", e);
+        }
+      }
+    }
+
+    fsBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        enterFullscreen();
+      } else {
+        exitFullscreen();
+      }
+    });
+
+// --- Improved fullscreen button behavior for mobile ---
+let hideTimer;
+
+// always show button at startup
+fsBtn.style.opacity = "1";
+fsBtn.style.pointerEvents = "auto";
+
+// show button (and restart hide timer) only when in fullscreen
+function keepFSButtonVisible() {
+  fsBtn.style.opacity = "1";
+  fsBtn.style.pointerEvents = "auto";
+  clearTimeout(hideTimer);
+
+  // hide only if currently in fullscreen
+  if (document.fullscreenElement) {
+    hideTimer = setTimeout(() => {
+      fsBtn.style.opacity = "0";
+      fsBtn.style.pointerEvents = "none";
+    }, 3000); // hide after 3s inactivity
+  }
+}
+
+// user touches or moves → show again
+["touchstart", "mousemove"].forEach(evt => {
+  document.addEventListener(evt, keepFSButtonVisible);
+});
+
+// when fullscreen changes → show again and restart timer
+document.addEventListener("fullscreenchange", keepFSButtonVisible);
+
+    // Listen for fullscreen changes (for iOS/Android consistency)
+    document.addEventListener("fullscreenchange", () => {
+      if (document.fullscreenElement) {
+        fsIcon.classList.replace("fa-expand", "fa-compress");
+      } else {
+        fsIcon.classList.replace("fa-compress", "fa-expand");
+      }
+    });
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+if (isStandalone) {
+  // hide bottom safe area automatically
+  document.getElementById("colorDisplay").style.paddingBottom = "0px";
+}
+
+    if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('Service Worker registered'))
+        .catch(err => console.log('SW registration failed', err));
+    }
+  </script>
+</body>
+</html>
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Color Viewer 8</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: white;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+
+
+    }
+    #colorDisplay {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: white;
+      background: black;
+      transition: background 0.2s ease;
+    }
+    #msg {
+      position: absolute;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="colorDisplay">
+    <div id="msg">Waiting for color signal...</div>
+  </div>
+
+  <script>
+    // Connect to same origin (Cloudflare tunnel domain)
+    const socket = io();
+
+    const colorDisplay = document.getElementById("colorDisplay");
+    const msg = document.getElementById("msg");
+
+    // Request fullscreen on first user interaction (iOS requires this)
+    function enableFullscreen() {
+      // ensure viewport covers safe areas
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (meta) meta.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no');
+
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+      msg.style.display = "none";
+    }
+
+    // On first tap, go fullscreen and keep screen awake
+    document.addEventListener("touchstart", async () => {
+      enableFullscreen();
+      // Prevent mobile sleep
+      try {
+        if ("wakeLock" in navigator) {
+          await navigator.wakeLock.request("screen");
+        }
+      } catch (e) {
+        console.log("Wake lock not supported:", e);
+      }
+    }, { once: true });
+
+    // Listen for color updates
+    socket.on("showColor", (color) => {
+      colorDisplay.style.background = color;
+      msg.innerText = color;
+    });
+
+    // Tap anywhere to exit full screen manually if needed
+    colorDisplay.addEventListener("click", () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+    });
+  </script>
+</body>
+</html> -->
